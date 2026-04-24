@@ -7,6 +7,7 @@ const ENGINE_AUTHOR = "H."
 
 # Global state
 board = startboard()
+game_key_history = UInt64[board.key]
 num_threads::Int = 4
 max_depth::Int = 99
 search_stopped::Atomic{Bool} = Atomic{Bool}(false)
@@ -32,7 +33,6 @@ function process_position(command::String)
         global board = startboard()
         idx += 1
     elseif tokens[idx] == "fen"
-        # Collect FEN tokens until we hit "moves" or end of command
         fen_parts = String[]
         idx += 1
         while idx <= length(tokens) && tokens[idx] != "moves"
@@ -48,7 +48,9 @@ function process_position(command::String)
     else
         return
     end
-    
+
+    global game_key_history = UInt64[board.key]
+
     # Process moves if present
     if idx <= length(tokens) && tokens[idx] == "moves"
         idx += 1
@@ -56,6 +58,7 @@ function process_position(command::String)
             try
                 move = movefromstring(tokens[idx])
                 domove!(board, move)
+                push!(game_key_history, board.key)
             catch
                 # Invalid move, skip it
             end
@@ -169,32 +172,18 @@ function process_go(tokens::Vector{String})
     # Calculate time limit if not depth-limited
     if !depth_limited
         if movetime > 0
-            time_limit = div(movetime * 6, 10)
+            time_limit = movetime
         else
-            # Determine which player to move and calculate time
-            if sidetomove(board) == WHITE && wtime > 0
-                base_time = div(wtime, (movestogo > 0 ? movestogo + 2 : 20))
-                time_limit = div(base_time * 6, 10) + div(winc, 2)
-                
-                if wtime < 20000
-                    time_limit = div(base_time * 6, 10) + div(winc, 3)
-                end
-                
-                time_limit = clamp(time_limit, 0, div(wtime, 2) - 10)
-            elseif sidetomove(board) == BLACK && btime > 0
-                base_time = div(btime, (movestogo > 0 ? movestogo + 2 : 20))
-                time_limit = div(base_time * 6, 10) + div(binc, 2)
-                
-                if btime < 20000
-                    time_limit = div(base_time * 6, 10) + div(binc, 3)
-                end
-                
-                time_limit = clamp(time_limit, 0, div(btime, 2) - 10)
+            my_time  = sidetomove(board) == WHITE ? wtime : btime
+            my_inc   = sidetomove(board) == WHITE ? winc  : binc
+            if my_time > 0
+                time_limit = div(my_time, 20) + div(my_inc, 2)
+                time_limit = clamp(time_limit, 0, div(my_time, 2))
             end
         end
     end
     
-    search_thread(board, search_depth, time_limit)
+    Threads.@spawn search_thread(deepcopy(board), search_depth, time_limit)
 end
 
 """
@@ -254,6 +243,7 @@ function uci_loop()
             elseif line == "stop"
                 process_stop()
             elseif line == "quit"
+                search_stopped[] = true
                 break
             end
         catch e
