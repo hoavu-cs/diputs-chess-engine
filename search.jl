@@ -121,7 +121,7 @@ function quiescence(b::Board, α::Int, β::Int, ply::Int, node_count::Ref{Int}, 
     cnt = 0
     for k in key_history
         k == b.key && (cnt += 1)
-        cnt >= 2 && return 0
+        cnt ≥ 2 && return 0
     end
 
     if ischeckmate(b)
@@ -161,7 +161,7 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     if search_stopped[]
         return 0
     end
-    if time_ns() >= search_deadline[]
+    if time_ns() ≥ search_deadline[]
         search_stopped[] = true
         return 0
     end
@@ -169,7 +169,7 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     cnt = 0
     for k in key_history
         k == b.key && (cnt += 1)
-        cnt >= 2 && return 0
+        cnt ≥ 2 && return 0
     end
     isdraw(b) && return 0
 
@@ -188,10 +188,10 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     hit, tt_score, tt_best = probe_tt(b.key, depth, α, β, ply)
     hit && return tt_score
 
-    if depth >= 3 && !ischeck(b)
+    if depth ≤ 3 && !ischeck(b)
         eval = static_eval(b)
         margin = 150 * depth
-        eval >= β + margin && return eval
+        eval ≥ β + margin && return eval
     end
 
     sort!(ml, by = m -> score_move(b, m, tt_best), rev = true)
@@ -226,7 +226,7 @@ end
 
 function search(b::Board, max_depth::Int, time_limit::Int)::Move
     start_ns  = time_ns()
-    if time_limit >= typemax(Int) >> 20
+    if time_limit ≥ typemax(Int) >> 20
         deadline = start_ns + 30_000_000_000 # 30 seconds if time limit is not set
     else
         deadline = start_ns + UInt64(time_limit) * 1_000_000
