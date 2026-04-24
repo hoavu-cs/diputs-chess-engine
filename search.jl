@@ -89,6 +89,24 @@ end
 
 init_tt()
 
+# ── LMR Table ─────────────────────────────────────────────────────────────────────
+
+const LMR_DEPTH_MAX = 99
+const LMR_MOVES_MAX = 256
+
+const LMR_TABLE = zeros(Int, LMR_DEPTH_MAX, LMR_MOVES_MAX)
+
+function init_lmr_table!()
+    for d in 1:LMR_DEPTH_MAX
+        for i in 1:LMR_MOVES_MAX
+            R = 0.99 + log(d) * log(i) / 3
+            LMR_TABLE[d, i] = clamp(round(Int, R), 1, d - 1)
+        end
+    end
+end
+
+init_lmr_table!()
+
 search_deadline = Ref{UInt64}(typemax(UInt64))
 
 # Move ordering scores
@@ -222,11 +240,31 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     best_move = Move(0)
     flag = TT_UPPER
 
-    for m in ml
-        empty!(child_pv)
+    for (i, m) in enumerate(ml)
+        lmr = i > 3 && depth ≥ 3 && promotion(m) == PieceType(0) && m != tt_best
+        is_capture = moveiscapture(b, m)
+
         u  = domove!(b, m)
         push!(key_history, b.key)
-        sc = -negamax(b, depth - 1, -β, -α, ply + 1, child_pv, node_count, key_history)
+
+        if lmr
+            R = LMR_TABLE[depth, min(i, LMR_MOVES_MAX)]
+            ischeck(b) && (R = max(1, R - 1))
+            is_capture && (R = max(1, R - 1))
+            R = min(R, depth - 1)
+
+            empty!(child_pv)
+            sc = -negamax(b, depth - 1 - R, -α - 1, -α, ply + 1, child_pv, node_count, key_history)
+
+            if sc > α
+                empty!(child_pv)
+                sc = -negamax(b, depth - 1, -β, -α, ply + 1, child_pv, node_count, key_history)
+            end
+        else
+            empty!(child_pv)
+            sc = -negamax(b, depth - 1, -β, -α, ply + 1, child_pv, node_count, key_history)
+        end
+
         pop!(key_history)
         undomove!(b, u)
 
