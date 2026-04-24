@@ -188,10 +188,32 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     hit, tt_score, tt_best = probe_tt(b.key, depth, α, β, ply)
     hit && return tt_score
 
-    if depth ≤ 3 && !ischeck(b)
+    # Reverse futility pruning ~ 280 Elo
+    in_check = ischeck(b)
+    if depth ≤ 3 && !in_check
         eval = static_eval(b)
         margin = 150 * depth
         eval ≥ β + margin && return eval
+    end
+
+    # Null move pruning — skip if side to move has only king + pawns
+    if depth ≥ 6 && !in_check && static_eval(b) ≥ β
+        has_piece = false
+        side = sidetomove(b)
+        for pt in (QUEEN, ROOK, BISHOP, KNIGHT)
+            for _ in pieces(b, side, pt)
+                has_piece = true
+                break
+            end
+            has_piece && break
+        end
+        if has_piece
+            R = 3 + div(depth, 4)
+            u = donullmove!(b)
+            sc = -negamax(b, depth - 1 - R, -β, -β + 1, ply + 1, Move[], node_count, key_history)
+            undomove!(b, u)
+            sc ≥ β && return β
+        end
     end
 
     sort!(ml, by = m -> score_move(b, m, tt_best), rev = true)
