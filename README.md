@@ -14,7 +14,7 @@ julia --project=. -e 'import Pkg; Pkg.instantiate()'
 ```
 
 ## Running
-One time set up to resolve dependencies. 
+
 ```bash
 julia --project=. uci.jl
 ```
