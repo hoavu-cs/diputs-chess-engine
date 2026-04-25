@@ -1,4 +1,4 @@
-# search_exp.jl — experimental search; include from uci_exp.jl
+# search.jl — NNUE search
 
 const INF        = 10_000_000
 const MATE_SCORE =  9_000_000
@@ -101,7 +101,7 @@ end
 
 init_lmr_table!()
 
-const nnue_net = load_nnue(joinpath(@__DIR__, "..", "nnue_hl_1024.bin"))
+const nnue_net = load_nnue(joinpath(@__DIR__, "nnue_hl_1024.bin"))
 const nnue_acc = Accumulator()
 
 const MAX_HISTORY = 16384
