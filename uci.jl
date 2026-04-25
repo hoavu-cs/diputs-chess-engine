@@ -92,7 +92,6 @@ function process_option(tokens::Vector{String})
     end
 end
 
-include("evaluation.jl")
 include("nnue.jl")
 include("search.jl")
 
