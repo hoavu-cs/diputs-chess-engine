@@ -22,13 +22,13 @@ julia --project=. src/uci.jl
 Communicates via the UCI protocol on stdin/stdout. Quick smoke test:
 
 ```bash
-julia --project=. src/uci.jl <<'EOF'
+julia --project=. src/uci.jl 
 uci
 isready
 position startpos
 go depth 6
+...
 quit
-EOF
 ```
 
 ## Adding to a GUI
