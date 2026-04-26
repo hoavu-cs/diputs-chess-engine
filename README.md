@@ -5,7 +5,7 @@ I have 1 week to work on this project (mostly to rehash my Julia) and then I wil
 
 ## Requirements
 
-- [Julia](https://julialang.org/downloads/) 1.9+
+- [Julia](https://julialang.org/downloads/) 1.9+. Make sure to add it to your PATH.
 
 ## Setup (one time)
 
