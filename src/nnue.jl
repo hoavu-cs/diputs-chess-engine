@@ -107,39 +107,130 @@ end
     end
 end
 
-# Incremental update in place. Call BEFORE domove!(b, m).
-# Falls back to full refresh for castling / en passant / promotion.
-function update!(acc::Accumulator, b::Board, m::Move, net::NNUENet)
-    piece  = pieceon(b, from(m))
-    from_f = (from(m).val - 1) >> 3
-    to_f   = (to(m).val   - 1) >> 3
-    is_ep  = ptype(piece) == PAWN && from_f != to_f && !moveiscapture(b, m)
-    is_cast = ptype(piece) == KING && abs(from_f - to_f) > 1
+@inline function _apply_ep!(acc::Accumulator, b::Board, m::Move, net::NNUENet, ::Val{add}) where {add}
+    fw   = net.fw
+    fsq  = _nnue_sq(from(m).val)
+    tsq  = _nnue_sq(to(m).val)
+    ep_sq = _nnue_sq(((to(m).val - 1) >> 3) * 8 + ((from(m).val - 1) & 7) + 1)
 
-    if promotion(m) != PieceType(0) || is_ep || is_cast
-        u = domove!(b, m)
-        refresh!(acc, b, net)
-        undomove!(b, u)
-        return
+    if pcolor(pieceon(b, from(m))) == WHITE
+        add ? _acc_sub!(acc.w, fw, 0, 0, fsq)        : _acc_add!(acc.w, fw, 0, 0, fsq)
+        add ? _acc_add!(acc.w, fw, 0, 0, tsq)        : _acc_sub!(acc.w, fw, 0, 0, tsq)
+        add ? _acc_sub!(acc.w, fw, 1, 0, ep_sq)      : _acc_add!(acc.w, fw, 1, 0, ep_sq)
+        add ? _acc_sub!(acc.b, fw, 1, 0, fsq ⊻ 56)  : _acc_add!(acc.b, fw, 1, 0, fsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 1, 0, tsq ⊻ 56)  : _acc_sub!(acc.b, fw, 1, 0, tsq ⊻ 56)
+        add ? _acc_sub!(acc.b, fw, 0, 0, ep_sq ⊻ 56) : _acc_add!(acc.b, fw, 0, 0, ep_sq ⊻ 56)
+    else
+        add ? _acc_sub!(acc.b, fw, 0, 0, fsq ⊻ 56)  : _acc_add!(acc.b, fw, 0, 0, fsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 0, 0, tsq ⊻ 56)  : _acc_sub!(acc.b, fw, 0, 0, tsq ⊻ 56)
+        add ? _acc_sub!(acc.b, fw, 1, 0, ep_sq ⊻ 56) : _acc_add!(acc.b, fw, 1, 0, ep_sq ⊻ 56)
+        add ? _acc_sub!(acc.w, fw, 1, 0, fsq)        : _acc_add!(acc.w, fw, 1, 0, fsq)
+        add ? _acc_add!(acc.w, fw, 1, 0, tsq)        : _acc_sub!(acc.w, fw, 1, 0, tsq)
+        add ? _acc_sub!(acc.w, fw, 0, 0, ep_sq)      : _acc_add!(acc.w, fw, 0, 0, ep_sq)
+    end
+end
+
+@inline function _apply_castle!(acc::Accumulator, b::Board, m::Move, net::NNUENet, ::Val{add}) where {add}
+    fw = net.fw
+    fsq = _nnue_sq(from(m).val)
+    tsq = _nnue_sq(to(m).val)
+
+    from_rank = (from(m).val - 1) & 7
+    to_file   = (to(m).val   - 1) >> 3
+    if to_file == 6  # kingside
+        rfsq = _nnue_sq(7 * 8 + from_rank + 1)
+        rtsq = _nnue_sq(5 * 8 + from_rank + 1)
+    else             # queenside
+        rfsq = _nnue_sq(from_rank + 1)
+        rtsq = _nnue_sq(3 * 8 + from_rank + 1)
     end
 
-    _apply_move!(acc, b, m, net, Val(true))
+    if pcolor(pieceon(b, from(m))) == WHITE
+        add ? _acc_sub!(acc.w, fw, 0, 5, fsq)        : _acc_add!(acc.w, fw, 0, 5, fsq)
+        add ? _acc_add!(acc.w, fw, 0, 5, tsq)        : _acc_sub!(acc.w, fw, 0, 5, tsq)
+        add ? _acc_sub!(acc.b, fw, 1, 5, fsq ⊻ 56)  : _acc_add!(acc.b, fw, 1, 5, fsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 1, 5, tsq ⊻ 56)  : _acc_sub!(acc.b, fw, 1, 5, tsq ⊻ 56)
+        add ? _acc_sub!(acc.w, fw, 0, 3, rfsq)       : _acc_add!(acc.w, fw, 0, 3, rfsq)
+        add ? _acc_add!(acc.w, fw, 0, 3, rtsq)       : _acc_sub!(acc.w, fw, 0, 3, rtsq)
+        add ? _acc_sub!(acc.b, fw, 1, 3, rfsq ⊻ 56) : _acc_add!(acc.b, fw, 1, 3, rfsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 1, 3, rtsq ⊻ 56) : _acc_sub!(acc.b, fw, 1, 3, rtsq ⊻ 56)
+    else
+        add ? _acc_sub!(acc.b, fw, 0, 5, fsq ⊻ 56)  : _acc_add!(acc.b, fw, 0, 5, fsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 0, 5, tsq ⊻ 56)  : _acc_sub!(acc.b, fw, 0, 5, tsq ⊻ 56)
+        add ? _acc_sub!(acc.w, fw, 1, 5, fsq)        : _acc_add!(acc.w, fw, 1, 5, fsq)
+        add ? _acc_add!(acc.w, fw, 1, 5, tsq)        : _acc_sub!(acc.w, fw, 1, 5, tsq)
+        add ? _acc_sub!(acc.b, fw, 0, 3, rfsq ⊻ 56) : _acc_add!(acc.b, fw, 0, 3, rfsq ⊻ 56)
+        add ? _acc_add!(acc.b, fw, 0, 3, rtsq ⊻ 56) : _acc_sub!(acc.b, fw, 0, 3, rtsq ⊻ 56)
+        add ? _acc_sub!(acc.w, fw, 1, 3, rfsq)       : _acc_add!(acc.w, fw, 1, 3, rfsq)
+        add ? _acc_add!(acc.w, fw, 1, 3, rtsq)       : _acc_sub!(acc.w, fw, 1, 3, rtsq)
+    end
+end
+
+@inline function _apply_promo!(acc::Accumulator, b::Board, m::Move, net::NNUENet, ::Val{add}) where {add}
+    fw       = net.fw
+    fsq      = _nnue_sq(from(m).val)
+    tsq      = _nnue_sq(to(m).val)
+    promo_pt = promotion(m).val - 1
+
+    if pcolor(pieceon(b, from(m))) == WHITE
+        add ? _acc_sub!(acc.w, fw, 0, 0, fsq)              : _acc_add!(acc.w, fw, 0, 0, fsq)
+        add ? _acc_sub!(acc.b, fw, 1, 0, fsq ⊻ 56)        : _acc_add!(acc.b, fw, 1, 0, fsq ⊻ 56)
+        add ? _acc_add!(acc.w, fw, 0, promo_pt, tsq)       : _acc_sub!(acc.w, fw, 0, promo_pt, tsq)
+        add ? _acc_add!(acc.b, fw, 1, promo_pt, tsq ⊻ 56) : _acc_sub!(acc.b, fw, 1, promo_pt, tsq ⊻ 56)
+        if moveiscapture(b, m)
+            cp = ptype(pieceon(b, to(m))).val - 1
+            add ? _acc_sub!(acc.w, fw, 1, cp, tsq)        : _acc_add!(acc.w, fw, 1, cp, tsq)
+            add ? _acc_sub!(acc.b, fw, 0, cp, tsq ⊻ 56)  : _acc_add!(acc.b, fw, 0, cp, tsq ⊻ 56)
+        end
+    else
+        add ? _acc_sub!(acc.b, fw, 0, 0, fsq ⊻ 56)        : _acc_add!(acc.b, fw, 0, 0, fsq ⊻ 56)
+        add ? _acc_sub!(acc.w, fw, 1, 0, fsq)              : _acc_add!(acc.w, fw, 1, 0, fsq)
+        add ? _acc_add!(acc.b, fw, 0, promo_pt, tsq ⊻ 56) : _acc_sub!(acc.b, fw, 0, promo_pt, tsq ⊻ 56)
+        add ? _acc_add!(acc.w, fw, 1, promo_pt, tsq)       : _acc_sub!(acc.w, fw, 1, promo_pt, tsq)
+        if moveiscapture(b, m)
+            cp = ptype(pieceon(b, to(m))).val - 1
+            add ? _acc_sub!(acc.b, fw, 1, cp, tsq ⊻ 56)  : _acc_add!(acc.b, fw, 1, cp, tsq ⊻ 56)
+            add ? _acc_sub!(acc.w, fw, 0, cp, tsq)        : _acc_add!(acc.w, fw, 0, cp, tsq)
+        end
+    end
+end
+
+# Incremental update in place. Call BEFORE domove!(b, m).
+function update!(acc::Accumulator, b::Board, m::Move, net::NNUENet)
+    piece   = pieceon(b, from(m))
+    from_f  = (from(m).val - 1) >> 3
+    to_f    = (to(m).val   - 1) >> 3
+    is_ep   = ptype(piece) == PAWN && from_f != to_f && !moveiscapture(b, m)
+    is_cast = ptype(piece) == KING && abs(from_f - to_f) > 1
+
+    if is_ep
+        _apply_ep!(acc, b, m, net, Val(true))
+    elseif is_cast
+        _apply_castle!(acc, b, m, net, Val(true))
+    elseif promotion(m) != PieceType(0)
+        _apply_promo!(acc, b, m, net, Val(true))
+    else
+        _apply_move!(acc, b, m, net, Val(true))
+    end
 end
 
 # Reverse the update. Call AFTER undomove!(b, u) — board is back to pre-move state.
 function undo_update!(acc::Accumulator, b::Board, m::Move, net::NNUENet)
-    piece  = pieceon(b, from(m))
-    from_f = (from(m).val - 1) >> 3
-    to_f   = (to(m).val   - 1) >> 3
-    is_ep  = ptype(piece) == PAWN && from_f != to_f && !moveiscapture(b, m)
+    piece   = pieceon(b, from(m))
+    from_f  = (from(m).val - 1) >> 3
+    to_f    = (to(m).val   - 1) >> 3
+    is_ep   = ptype(piece) == PAWN && from_f != to_f && !moveiscapture(b, m)
     is_cast = ptype(piece) == KING && abs(from_f - to_f) > 1
 
-    if promotion(m) != PieceType(0) || is_ep || is_cast
-        refresh!(acc, b, net)
-        return
+    if is_ep
+        _apply_ep!(acc, b, m, net, Val(false))
+    elseif is_cast
+        _apply_castle!(acc, b, m, net, Val(false))
+    elseif promotion(m) != PieceType(0)
+        _apply_promo!(acc, b, m, net, Val(false))
+    else
+        _apply_move!(acc, b, m, net, Val(false))
     end
-
-    _apply_move!(acc, b, m, net, Val(false))
 end
 
 # Evaluate from a pre-built accumulator. Returns centipawns from side-to-move perspective.
