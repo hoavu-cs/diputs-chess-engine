@@ -16,13 +16,13 @@ julia --project=. -e 'import Pkg; Pkg.instantiate()'
 ## Running
 
 ```bash
-julia --project=. uci.jl
+julia --project=. src/uci.jl
 ```
 
 Communicates via the UCI protocol on stdin/stdout. Quick smoke test:
 
 ```bash
-julia --project=. uci.jl <<'EOF'
+julia --project=. src/uci.jl <<'EOF'
 uci
 isready
 position startpos
@@ -33,9 +33,21 @@ EOF
 
 ## Adding to a GUI
 
-Point your UCI-compatible GUI (Arena, cutechess, etc.) to the wrapper script:
+Point your UCI-compatible GUI (Arena, cutechess, fastchess, etc.) to the wrapper script:
 
 ```
 diputs.sh
+```
+
+Make it executable first:
+
+```bash
+chmod +x diputs.sh
+```
+
+Or run directly from the terminal:
+
+```bash
+bash diputs.sh
 ```
 
