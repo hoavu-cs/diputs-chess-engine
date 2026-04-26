@@ -1,5 +1,57 @@
 === SPRT Results Log ===
 
+a07c87f — Fix a few consistency issues. Fix crippled PV.
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (10+0.1, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 9.41 +/- 11.74, nElo: 14.20 +/- 17.71
+LOS: 94.20 %, DrawRatio: 41.27 %, PairsRatio: 1.12
+Games: 1478, Wins: 449, Losses: 409, Draws: 620, Points: 759.0 (51.35 %)
+Ptnml(0-2): [28, 177, 305, 185, 44], WL/DD Ratio: 1.36
+LLR: 1.13 (51.3%) (-2.20, 2.20) [0.00, 10.00]
+--------------------------------------------------
+
+416d626 — 2 Killer moves.
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (15+0.15, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 6.49 +/- 9.50, nElo: 9.93 +/- 14.53
+LOS: 90.97 %, DrawRatio: 41.53 %, PairsRatio: 1.08
+Games: 2196, Wins: 651, Losses: 610, Draws: 935, Points: 1118.5 (50.93 %)
+Ptnml(0-2): [41, 268, 456, 275, 58], WL/DD Ratio: 1.33
+LLR: 0.90 (40.8%) (-2.20, 2.20) [0.00, 10.00]
+--------------------------------------------------
+
+IIR
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (15+0.15, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 11.47 +/- 9.60, nElo: 17.55 +/- 14.68
+LOS: 99.04 %, DrawRatio: 40.99 %, PairsRatio: 1.19
+Games: 2152, Wins: 641, Losses: 570, Draws: 941, Points: 1111.5 (51.65 %)
+Ptnml(0-2): [40, 250, 441, 289, 56], WL/DD Ratio: 1.19
+LLR: 2.23 (101.6%) (-2.20, 2.20) [0.00, 10.00]
+--------------------------------------------------
+
+2502bff — Make root's LMR more consistent:
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (10+0.1, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 30.94 +/- 18.18, nElo: 44.15 +/- 25.77
+LOS: 99.96 %, DrawRatio: 41.26 %, PairsRatio: 1.66
+Games: 698, Wins: 238, Losses: 176, Draws: 284, Points: 380.0 (54.44 %)
+Ptnml(0-2): [19, 58, 144, 98, 30], WL/DD Ratio: 1.25
+LLR: 2.20 (100.3%) (-2.20, 2.20) [0.00, 10.00]
+SPRT ([0.00, 10.00]) completed - H1 was accepted
+--------------------------------------------------
+
+7666738 — Add LMR to root search
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (10+0.1, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 141.89 +/- 37.82, nElo: 210.04 +/- 49.93
+LOS: 100.00 %, DrawRatio: 38.71 %, PairsRatio: 13.25
+Games: 186, Wins: 103, Losses: 31, Draws: 52, Points: 129.0 (69.35 %)
+Ptnml(0-2): [1, 3, 36, 29, 24], WL/DD Ratio: 2.60
+LLR: 2.22 (101.2%) (-2.20, 2.20) [0.00, 10.00]
+SPRT ([0.00, 10.00]) completed - H1 was accepted
+--------------------------------------------------
+
 f74fd72 — Simplify probe_tt by moving α/β cutoff logic into negamax
 --------------------------------------------------
 Results of DIPUTEXP vs Diputs (10+0.1, 4t, 256MB, UHO_Lichess_4852_v1.epd):
