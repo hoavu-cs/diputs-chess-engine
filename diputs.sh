@@ -1,3 +1,3 @@
 #!/bin/bash
-DIR=/home/hoa-vu/git/diputs-chess-engine
-exec julia --project="$DIR" "$DIR/uci.jl"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec julia --project="$DIR" "$DIR/src/uci.jl"
