@@ -347,13 +347,27 @@ function search(b::Board, max_depth::Int, time_limit::Int)::Move
         pv         = Move[]
         child_pv   = Move[]
 
-        for m in ml
+        stm = sidetomove(b) == WHITE ? 1 : 2
+        sort!(ml, by = m -> m == best_move ? _SCORE_HASH : history[stm, from(m).val, to(m).val], rev = true)
+
+        for (i, m) in enumerate(ml)
             search_stopped[] && break
             empty!(child_pv)
+
+            lmr = i > 1 && depth ≥ 3 && promotion(m) == PieceType(0) && !moveiscapture(b, m) && m != best_move
+            R = lmr ? min(1, depth - 1) : 0
+
             update!(nnue_acc, b, m, nnue_net)
             u  = domove!(b, m)
             push!(key_history, b.key)
-            sc = -negamax(b, depth - 1, -INF, -α, 1, child_pv, node_count, key_history)
+
+            
+            sc = -negamax(b, depth - 1 - R, -INF, -α, 1, Move[], node_count, key_history)
+            if R > 0 && sc > α
+                empty!(child_pv)
+                sc = -negamax(b, depth - 1, -INF, -α, 1, child_pv, node_count, key_history)
+            end
+
             pop!(key_history)
             undomove!(b, u)
             undo_update!(nnue_acc, b, m, nnue_net)
