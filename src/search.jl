@@ -239,10 +239,13 @@ function quiescence(b::Board, α::Int, β::Int, ply::Int, node_count::Ref{Int}, 
     stand_pat ≥ β && return stand_pat
     α = max(α, stand_pat)
 
-    captures = filter(m -> moveiscapture(b, m), moves(b))
+    captures = Move[]
+    for m in moves(b)
+        moveiscapture(b, m) && push!(captures, m)
+    end
     isempty(captures) && return α
 
-    sort!(captures, by = m -> score_move(b, m, Move(0), Move(0), Move(0)), rev = true)
+    sort_moves!(b, captures, ply, Move(0), Move(0), Move(0), 0, 0)
 
     best = stand_pat
     for m in captures
@@ -466,11 +469,16 @@ function search(b::Board, max_depth::Int, time_limit::Int)::Move
     isempty(ml) && return best_move
     search_deadline[] = deadline
 
+    prev_score = 0
+
     for depth in 1:max_depth
         search_stopped[] && break
 
-        α          = -INF
+        window     = 50
+        asp_α      = depth ≥ 6 ? prev_score - window : -INF
+        asp_β      = depth ≥ 6 ? prev_score + window :  INF
         depth_best = Move(0)
+        best_score = prev_score
         pv         = Move[]
         child_pv   = Move[]
 
@@ -478,44 +486,68 @@ function search(b::Board, max_depth::Int, time_limit::Int)::Move
         k2 = killers[2, 1]
         sort!(ml, by = m -> score_move(b, m, best_move, k1, k2), rev = true)
 
-        for (i, m) in enumerate(ml)
+        while true
             search_stopped[] && break
-            empty!(child_pv)
+            α         = asp_α
+            iter_best = Move(0)
+            empty!(pv)
 
-            lmr = i > 2 && depth ≥ 3 && promotion(m) == PieceType(0)
-
-            cur_pt = ptype(pieceon(b, from(m))).val
-            update!(nnue_acc, b, m, nnue_net)
-            u  = domove!(b, m)
-            push!(key_history, b.key)
-            move_stack[1] = (cur_pt, to(m).val)
-
-            R = lmr ? lmr_reduction(depth, i, ischeck(b), false) : 0
-            sc = -negamax(b, depth - 1 - R, -INF, -α, 1, child_pv, node_count, key_history)
-            if R > 0 && sc > α
+            for (i, m) in enumerate(ml)
+                search_stopped[] && break
                 empty!(child_pv)
-                sc = -negamax(b, depth - 1, -INF, -α, 1, child_pv, node_count, key_history)
+
+                lmr = i > 2 && depth ≥ 3 && promotion(m) == PieceType(0)
+
+                cur_pt = ptype(pieceon(b, from(m))).val
+                update!(nnue_acc, b, m, nnue_net)
+                u  = domove!(b, m)
+                push!(key_history, b.key)
+                move_stack[1] = (cur_pt, to(m).val)
+
+                R = lmr ? lmr_reduction(depth, i, ischeck(b), false) : 0
+                sc = -negamax(b, depth - 1 - R, -asp_β, -α, 1, child_pv, node_count, key_history)
+                if R > 0 && sc > α
+                    empty!(child_pv)
+                    sc = -negamax(b, depth - 1, -asp_β, -α, 1, child_pv, node_count, key_history)
+                end
+
+                pop!(key_history)
+                undomove!(b, u)
+                undo_update!(nnue_acc, b, m, nnue_net)
+
+                if sc > α
+                    α = sc
+                    iter_best = m
+                    empty!(pv)
+                    push!(pv, m)
+                    append!(pv, child_pv)
+                    α ≥ asp_β && break
+                end
             end
 
-            pop!(key_history)
-            undomove!(b, u)
-            undo_update!(nnue_acc, b, m, nnue_net)
+            search_stopped[] && break
 
-            if sc > α
-                α = sc
-                depth_best = m
-                empty!(pv)
-                push!(pv, m)
-                append!(pv, child_pv)
+            if α ≤ asp_α
+                window *= 2
+                asp_α = window >= 200 ? -INF : max(asp_α - window, -INF)
+            elseif α ≥ asp_β
+                iter_best != Move(0) && (depth_best = iter_best; best_score = α)
+                window *= 2
+                asp_β = window >= 200 ?  INF : min(asp_β + window, INF)
+            else
+                depth_best = iter_best
+                best_score = α
+                break
             end
         end
 
         if !search_stopped[] && depth_best != Move(0)
             best_move  = depth_best
+            prev_score = best_score
             elapsed_ms = div(time_ns() - start_ns, 1_000_000)
             nps = elapsed_ms > 0 ? div(node_count[] * 1000, elapsed_ms) : 0
             pv_str = join(tostring.(pv), " ")
-            println("info depth $depth score cp $α time $elapsed_ms nodes $(node_count[]) nps $nps pv $pv_str")
+            println("info depth $depth score cp $best_score time $elapsed_ms nodes $(node_count[]) nps $nps pv $pv_str")
             flush(stdout)
         end
 
