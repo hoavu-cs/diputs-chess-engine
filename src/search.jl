@@ -155,6 +155,7 @@ const _SCORE_HASH     = 1_000_000
 const _SCORE_PROMO    =   900_000
 const _SCORE_CAPTURE  =   100_000  # + MVV-LVA offset
 const _SCORE_KILLER   =    90_000
+const _MOVE_SCORES = zeros(Int, 256, 256) # [ply, move_index]
 
 @inline function score_move(b::Board, m::Move, tt_move::Move, k1::Move, k2::Move, prev_pt::Int = 0, prev_to::Int = 0)::Int
     m == tt_move && return _SCORE_HASH
@@ -178,6 +179,28 @@ const _SCORE_KILLER   =    90_000
     cur_pt = ptype(pieceon(b, from(m))).val
     ch = prev_pt > 0 ? @inbounds(Int(cont_hist[to(m).val, cur_pt, prev_to, prev_pt, color])) : 0
     return @inbounds(history[color, from(m).val, to(m).val]) + ch ÷ 2
+end
+
+function sort_moves!(b::Board, ml::Vector{Move}, ply::Int, tt_best::Move, k1::Move, k2::Move, prev_pt::Int, prev_to::Int)
+    n = length(ml)
+    scores = @view _MOVE_SCORES[ply, 1:n]
+    
+    for i in 1:n
+        scores[i] = score_move(b, ml[i], tt_best, k1, k2, prev_pt, prev_to)
+    end
+
+    for i in 2:n
+        tmp_m = ml[i]
+        tmp_s = scores[i]
+        j = i - 1
+        while j >= 1 && scores[j] < tmp_s
+            ml[j+1] = ml[j]
+            scores[j+1] = scores[j]
+            j -= 1
+        end
+        ml[j+1] = tmp_m
+        scores[j+1] = tmp_s
+    end
 end
 
 """__________________________________________________
@@ -325,7 +348,7 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     stm = sidetomove(b) == WHITE ? 1 : 2
     prev_pt, prev_to = ply > 1 ? move_stack[ply] : (0, 0)
 
-    sort!(ml, by = m -> score_move(b, m, tt_best, k1, k2, prev_pt, prev_to), rev = true)
+    sort_moves!(b, ml, ply, tt_best, k1, k2, prev_pt, prev_to)  
 
     child_pv = Move[]
     best_score = -INF
@@ -398,6 +421,7 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     !search_stopped[] && store_tt(b.key, depth, best_score, flag, best_move, ply)
     return best_score
 end
+
 
 """__________________________________________________
 
