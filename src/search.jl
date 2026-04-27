@@ -27,8 +27,8 @@ end
 
 const TT_ENTRY_NULL = TTEntry(0, -1, 0, TT_EMPTY, Move(0))
 
-tt      = Vector{TTEntry}(undef, 1 << 22)
-tt_mask = UInt64((1 << 22) - 1)
+tt::Vector{TTEntry}  = Vector{TTEntry}(undef, 1 << 22)
+tt_mask::UInt64      = UInt64((1 << 22) - 1)
 
 function init_tt()
     global tt      = Vector{TTEntry}(undef, 1 << 22)
@@ -144,7 +144,7 @@ end
     end
 end
 
-search_deadline = Ref{UInt64}(typemax(UInt64))
+const search_deadline = Ref{UInt64}(typemax(UInt64))
 
 """__________________________________________________
 

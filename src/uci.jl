@@ -1,39 +1,37 @@
 using Chess
 using Base.Threads
 
-# Engine metadata
-const ENGINE_NAME = "Diputs Chess Engine"
+const ENGINE_NAME   = "Diputs Chess Engine"
 const ENGINE_AUTHOR = "H."
 
-# Global state
-board = startboard()
-game_key_history = UInt64[board.key]
-num_threads::Int = 4
-max_depth::Int = 99
+"""__________________________________________________
+
+    Global State
+__________________________________________________"""
+
+board                        = startboard()
+game_key_history             = UInt64[board.key]
+num_threads::Int             = 4
+max_depth::Int               = 99
 search_stopped::Atomic{Bool} = Atomic{Bool}(false)
 search_running::Atomic{Bool} = Atomic{Bool}(false)
 
+"""__________________________________________________
 
+    Position & Options
+__________________________________________________"""
 
-"""
-    process_position(command::String)
-
-Parses and processes the 'position' command to set the board state.
-"""
 function process_position(command::String)
     tokens = String.(split(command))
-    
-    # Skip "position" token
     idx = 2
     if idx > length(tokens)
         return
     end
-    
+
     if tokens[idx] == "startpos"
         global board = startboard()
         idx += 1
     elseif tokens[idx] == "fen"
-        # Collect FEN tokens until we hit "moves" or end of command
         fen_parts = String[]
         idx += 1
         while idx <= length(tokens) && tokens[idx] != "moves"
@@ -52,7 +50,6 @@ function process_position(command::String)
 
     global game_key_history = UInt64[board.key]
 
-    # Process moves if present
     if idx <= length(tokens) && tokens[idx] == "moves"
         idx += 1
         while idx <= length(tokens)
@@ -61,54 +58,39 @@ function process_position(command::String)
                 domove!(board, move)
                 push!(game_key_history, board.key)
             catch
-                # Invalid move, skip it
             end
             idx += 1
         end
     end
 end
 
-"""
-    process_option(tokens::Vector{String})
-
-Parses and processes the 'setoption' command.
-"""
 function process_option(tokens::Vector{String})
     if length(tokens) < 5
         return
     end
-    
     option_name = tokens[3]
-    value_str = tokens[5]
-    
+    value_str   = tokens[5]
     if option_name == "Threads"
         global num_threads = parse(Int, value_str)
     elseif option_name == "Depth"
         global max_depth = parse(Int, value_str)
     elseif option_name == "Hash"
         resize_tt(parse(Int, value_str))
-    else
-        # Unknown option
     end
 end
 
 include("nnue.jl")
 include("search.jl")
 
-"""
-    search_thread(search_board::Board, search_depth::Int, time_limit::Int)
+"""__________________________________________________
 
-Runs search in a separate thread and outputs the best move.
-"""
+    Search Thread
+__________________________________________________"""
+
 function search_thread(search_board::Board, search_depth::Int, time_limit::Int)
     try
         best_move = search(search_board, search_depth, time_limit)
-        
-        if best_move != Move(0)
-            println("bestmove $(tostring(best_move))")
-        else
-            println("bestmove 0000")
-        end
+        println(best_move != Move(0) ? "bestmove $(tostring(best_move))" : "bestmove 0000")
         flush(stdout)
     catch e
         println("info string ERROR: $e")
@@ -119,90 +101,63 @@ function search_thread(search_board::Board, search_depth::Int, time_limit::Int)
     end
 end
 
-"""
-    process_go(tokens::Vector{String})
-
-Parses and processes the 'go' command to start the search.
-"""
 function process_go(tokens::Vector{String})
     search_stopped[] = false
     search_running[] = true
-    
-    time_limit = 30000  # Default to 30 seconds
-    search_depth = max_depth
+
+    time_limit    = 30000
+    search_depth  = max_depth
     depth_limited = false
-    
-    # Parse go command parameters
-    wtime = 0
-    btime = 0
-    winc = 0
-    binc = 0
-    movestogo = 0
-    movetime = 0
-    
+    wtime = btime = winc = binc = movestogo = movetime = 0
+
     idx = 2
     while idx <= length(tokens)
         if tokens[idx] == "wtime" && idx + 1 <= length(tokens)
-            wtime = parse(Int, tokens[idx + 1])
-            idx += 2
+            wtime = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "btime" && idx + 1 <= length(tokens)
-            btime = parse(Int, tokens[idx + 1])
-            idx += 2
+            btime = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "winc" && idx + 1 <= length(tokens)
-            winc = parse(Int, tokens[idx + 1])
-            idx += 2
+            winc = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "binc" && idx + 1 <= length(tokens)
-            binc = parse(Int, tokens[idx + 1])
-            idx += 2
+            binc = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "movestogo" && idx + 1 <= length(tokens)
-            movestogo = parse(Int, tokens[idx + 1])
-            idx += 2
+            movestogo = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "movetime" && idx + 1 <= length(tokens)
-            movetime = parse(Int, tokens[idx + 1])
-            idx += 2
+            movetime = parse(Int, tokens[idx + 1]); idx += 2
         elseif tokens[idx] == "depth" && idx + 1 <= length(tokens)
-            search_depth = parse(Int, tokens[idx + 1])
+            search_depth  = parse(Int, tokens[idx + 1])
             depth_limited = true
-            time_limit = typemax(Int)
+            time_limit    = typemax(Int)
             idx += 2
         else
             idx += 1
         end
     end
-    
-    # Calculate time limit if not depth-limited
+
     if !depth_limited
         if movetime > 0
             time_limit = movetime
         else
-            my_time  = sidetomove(board) == WHITE ? wtime : btime
-            my_inc   = sidetomove(board) == WHITE ? winc  : binc
+            my_time = sidetomove(board) == WHITE ? wtime : btime
+            my_inc  = sidetomove(board) == WHITE ? winc  : binc
             if my_time > 0
-                time_limit = div(my_time, 20) + div(my_inc, 2)
-                time_limit = clamp(time_limit, 0, div(my_time, 2))
+                time_limit = clamp(div(my_time, 20) + div(my_inc, 2), 0, div(my_time, 2))
             end
         end
     end
-    
+
     Threads.@spawn search_thread(deepcopy(board), search_depth, time_limit)
 end
 
-"""
-    process_stop()
-
-Handles the 'stop' command to stop the current search.
-"""
 function process_stop()
-    if search_running[]
-        search_stopped[] = true
-    end
+    search_running[] && (search_stopped[] = true)
 end
 
-"""
-    process_uci()
+"""__________________________________________________
 
-Sends engine identification and options to the GUI.
-"""
+    UCI Loop
+__________________________________________________"""
+
 function process_uci()
     println("id name $(ENGINE_NAME)")
     println("id author $(ENGINE_AUTHOR)")
@@ -213,23 +168,16 @@ function process_uci()
     flush(stdout)
 end
 
-"""
-    uci_loop()
-
-Main UCI command loop that reads and processes commands from stdin.
-"""
 function uci_loop()
     while true
         try
             line = String(strip(readline()))
-            
-            if isempty(line)
-                continue
-            elseif line == "uci"
+            isempty(line) && continue
+
+            if line == "uci"
                 process_uci()
             elseif line == "isready"
-                println("readyok")
-                flush(stdout)
+                println("readyok"); flush(stdout)
             elseif line == "ucinewgame"
                 global board = startboard()
                 clear_tt()
@@ -237,11 +185,9 @@ function uci_loop()
             elseif startswith(line, "position")
                 process_position(line)
             elseif startswith(line, "setoption")
-                tokens = String.(split(line))
-                process_option(tokens)
+                process_option(String.(split(line)))
             elseif startswith(line, "go")
-                tokens = String.(split(line))
-                process_go(tokens)
+                process_go(String.(split(line)))
             elseif line == "stop"
                 process_stop()
             elseif line == "quit"
@@ -250,12 +196,10 @@ function uci_loop()
             end
         catch e
             println(stderr, "UCI loop error: $e")
-            continue
         end
     end
 end
 
-# Entry point for PackageCompiler / direct execution
 function julia_main()::Cint
     uci_loop()
     return 0
