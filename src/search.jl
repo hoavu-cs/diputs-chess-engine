@@ -375,6 +375,11 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
         is_capture = moveiscapture(b, m)
         is_quiet = !is_capture && promotion(m) == PieceType(0)
 
+        # LMP skip late quiet moves at low depth
+        if depth ≤ 3 && !in_check && is_quiet
+            length(searched_quiets) ≥ (5 + depth * depth) ÷ (2 - Int(improving)) && continue
+        end
+
         cur_pt = ptype(pieceon(b, from(m))).val
         update!(nnue_acc, b, m, nnue_net)
         u  = domove!(b, m)
