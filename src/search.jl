@@ -118,6 +118,7 @@ const MAX_HISTORY = 16384
 
 const history    = zeros(Int, 2, 64, 64)
 const cont_hist  = zeros(Int16, 64, 7, 64, 7, 2)  # [cur_to, cur_pt, prev_to, prev_pt, stm]
+const cont_hist2 = zeros(Int16, 64, 7, 64, 7, 2)  # [cur_to, cur_pt, prev2_to, prev2_pt, stm]
 const eval_stack = zeros(Int, 256)
 const killers    = fill(Move(0), 2, 256)
 const move_stack = fill((0, 0), 256)
@@ -125,6 +126,7 @@ const move_stack = fill((0, 0), 256)
 function clear_history()
     fill!(history, 0)
     fill!(cont_hist, Int16(0))
+    fill!(cont_hist2, Int16(0))
     fill!(killers, Move(0))
     fill!(move_stack, (0, 0))
 end
@@ -135,12 +137,19 @@ end
         clamped - history[color, from_sq, to_sq] * abs(clamped) ÷ MAX_HISTORY
 end
 
-@inline function update_cont_hist!(stm::Int, prev_pt::Int, prev_to::Int, cur_pt::Int, cur_to::Int, bonus::Int)
+@inline function update_cont_hist!(stm::Int, prev_pt::Int, prev_to::Int, prev2_pt::Int, prev2_to::Int, cur_pt::Int, cur_to::Int, bonus::Int)
     prev_pt == 0 && return
     clamped = clamp(bonus, -MAX_HISTORY, MAX_HISTORY)
     @inbounds begin
         old = Int(cont_hist[cur_to, cur_pt, prev_to, prev_pt, stm])
         cont_hist[cur_to, cur_pt, prev_to, prev_pt, stm] = Int16(old + clamped - old * abs(clamped) ÷ MAX_HISTORY)
+    end
+    if prev2_pt > 0
+        clamped2 = clamp(bonus, -MAX_HISTORY, MAX_HISTORY)
+        @inbounds begin
+            old2 = Int(cont_hist2[cur_to, cur_pt, prev2_to, prev2_pt, stm])
+            cont_hist2[cur_to, cur_pt, prev2_to, prev2_pt, stm] = Int16(old2 + clamped2 - old2 * abs(clamped2) ÷ MAX_HISTORY)
+        end
     end
 end
 
@@ -157,7 +166,7 @@ const _SCORE_CAPTURE  =   100_000  # + MVV-LVA offset
 const _SCORE_KILLER   =    90_000
 const _MOVE_SCORES = zeros(Int, 256, 256) # [ply, move_index]
 
-@inline function score_move(b::Board, m::Move, tt_move::Move, k1::Move, k2::Move, prev_pt::Int = 0, prev_to::Int = 0)::Int
+@inline function score_move(b::Board, m::Move, tt_move::Move, k1::Move, k2::Move, prev_pt::Int = 0, prev_to::Int = 0, prev2_pt::Int = 0, prev2_to::Int = 0)::Int
     m == tt_move && return _SCORE_HASH
 
     promo = promotion(m)
@@ -177,16 +186,17 @@ const _MOVE_SCORES = zeros(Int, 256, 256) # [ply, move_index]
 
     color = sidetomove(b) == WHITE ? 1 : 2
     cur_pt = ptype(pieceon(b, from(m))).val
-    ch = prev_pt > 0 ? @inbounds(Int(cont_hist[to(m).val, cur_pt, prev_to, prev_pt, color])) : 0
-    return @inbounds(history[color, from(m).val, to(m).val]) + ch ÷ 2
+    ch  = prev_pt  > 0 ? @inbounds(Int(cont_hist[to(m).val, cur_pt, prev_to, prev_pt, color]))  : 0
+    ch2 = prev2_pt > 0 ? @inbounds(Int(cont_hist2[to(m).val, cur_pt, prev2_to, prev2_pt, color])) : 0
+    return @inbounds(history[color, from(m).val, to(m).val]) + (ch ÷ 2) + (ch2 ÷ 3)
 end
 
-function sort_moves!(b::Board, ml::Vector{Move}, ply::Int, tt_best::Move, k1::Move, k2::Move, prev_pt::Int, prev_to::Int)
+function sort_moves!(b::Board, ml::Vector{Move}, ply::Int, tt_best::Move, k1::Move, k2::Move, prev_pt::Int, prev_to::Int, prev2_pt::Int = 0, prev2_to::Int = 0)
     n = length(ml)
     scores = @view _MOVE_SCORES[ply, 1:n]
     
     for i in 1:n
-        scores[i] = score_move(b, ml[i], tt_best, k1, k2, prev_pt, prev_to)
+        scores[i] = score_move(b, ml[i], tt_best, k1, k2, prev_pt, prev_to, prev2_pt, prev2_to)
     end
 
     for i in 2:n
@@ -346,9 +356,10 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
     k1  = ply ≤ 256 ? killers[1, ply] : Move(0)
     k2  = ply ≤ 256 ? killers[2, ply] : Move(0)
     stm = sidetomove(b) == WHITE ? 1 : 2
-    prev_pt, prev_to = ply > 1 ? move_stack[ply] : (0, 0)
+    prev_pt,   prev_to   = ply > 1 ? move_stack[ply]   : (0, 0)
+    prev2_pt,  prev2_to  = ply > 2 ? move_stack[ply-1] : (0, 0)
 
-    sort_moves!(b, ml, ply, tt_best, k1, k2, prev_pt, prev_to)  
+    sort_moves!(b, ml, ply, tt_best, k1, k2, prev_pt, prev_to, prev2_pt, prev2_to)
 
     child_pv = Move[]
     best_score = -INF
@@ -403,11 +414,11 @@ function negamax(b::Board, depth::Int, α::Int, β::Int, ply::Int, pv::Vector{Mo
                         end
                         bonus = depth * depth
                         update_history!(stm, from(m).val, to(m).val, bonus)
-                        update_cont_hist!(stm, prev_pt, prev_to, cur_pt, to(m).val, bonus)
+                        update_cont_hist!(stm, prev_pt, prev_to, prev2_pt, prev2_to, cur_pt, to(m).val, bonus)
                         for qm in searched_quiets
                             qm_pt = ptype(pieceon(b, from(qm))).val
                             update_history!(stm, from(qm).val, to(qm).val, -bonus)
-                            update_cont_hist!(stm, prev_pt, prev_to, qm_pt, to(qm).val, -bonus)
+                            update_cont_hist!(stm, prev_pt, prev_to, prev2_pt, prev2_to, qm_pt, to(qm).val, -bonus)
                         end
                     end
                     break
@@ -434,6 +445,9 @@ function search(b::Board, max_depth::Int, time_limit::Int)::Move
     end
     @inbounds for i in eachindex(cont_hist)
         cont_hist[i] >>= 1
+    end
+    @inbounds for i in eachindex(cont_hist2)
+        cont_hist2[i] >>= 1
     end
     fill!(killers, Move(0))
     refresh!(nnue_acc, b, nnue_net)
