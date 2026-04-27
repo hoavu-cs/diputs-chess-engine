@@ -1,7 +1,20 @@
 # diputs-chess-engine
 
-A troll chess engine written in Julia with some vibecoding.
+A non-competitive troll chess engine written in Julia with some vibecoding.
 I have 1 week to work on this project (mostly to rehash my Julia) and then I will stop (most likely).
+
+## Strength
+Commit c400cf9 against Stash 27 (~3050), 40/5.
+```
+Score of diputs.sh vs stash-27.0-linux-64: 28 - 19 - 13 [0.575]
+...      diputs.sh playing White: 21 - 3 - 6  [0.800] 30
+...      diputs.sh playing Black: 7 - 16 - 7  [0.350] 30
+...      White vs Black: 37 - 10 - 13  [0.725] 60
+Elo difference: 52.5 +/- 79.8, LOS: 90.5 %, DrawRatio: 21.7 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+60 of 60 games finished.
+
+```
 
 ## Requirements
 

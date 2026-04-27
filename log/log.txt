@@ -1,5 +1,15 @@
 === SPRT Results Log ===
 
+c400cf9 — Add 2-ply continuation history
+--------------------------------------------------
+Results of DIPUTEXP vs Diputs (15+0.15, 4t, 256MB, UHO_Lichess_4852_v1.epd):
+Elo: 4.47 +/- 9.12, nElo: 7.29 +/- 14.87
+LOS: 83.19 %, DrawRatio: 47.09 %, PairsRatio: 1.08
+Games: 2098, Wins: 577, Losses: 550, Draws: 971, Points: 1062.5 (50.64 %)
+Ptnml(0-2): [36, 231, 494, 246, 42], WL/DD Ratio: 1.00
+LLR: 0.40 (18.1%) (-2.20, 2.20) [0.00, 10.00]
+--------------------------------------------------
+
 6463f5f — Use insertion sort. Avoid some memory allocation.
 --------------------------------------------------
 Results of DIPUTEXP vs Diputs (15+0.15, 4t, 256MB, UHO_Lichess_4852_v1.epd):
